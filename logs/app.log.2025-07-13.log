@@ -1,4 +1,0 @@
-2025-07-13 18:31:51,224 - ERROR - Error: object dict can't be used in 'await' expression
-2025-07-13 18:33:02,601 - ERROR - Error: object dict can't be used in 'await' expression
-2025-07-13 18:33:49,080 - INFO - Received: {'data': 'haguri-test', 'value': 'haguri,peng,jiwon'}
-2025-07-13 18:33:49,080 - ERROR - Error: Missing fields

@@ -1,3 +1,0 @@
-2025-07-16 21:42:04,871 - INFO - Received: {'ticker': 'TEST', 'value': 'haguri,peng,jiwon,chukbok'}
-2025-07-16 21:42:04,872 - INFO - signal: 
-2025-07-16 21:42:04,872 - ERROR - Error: signal is empty.

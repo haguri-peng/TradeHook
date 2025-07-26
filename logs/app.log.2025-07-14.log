@@ -1,6 +1,0 @@
-2025-07-14 00:43:56,186 - INFO - Received: {'data': 'haguri-test2', 'value': 'haguri,peng,jiwon,chukbok'}
-2025-07-14 00:43:56,187 - ERROR - Error: Missing fields.
-2025-07-14 00:49:31,756 - INFO - Received: {'data': 'haguri-test333', 'value': 'haguri,peng,jiwon,chukbok'}
-2025-07-14 00:49:31,756 - ERROR - Error: Missing fields.
-2025-07-14 00:52:23,212 - INFO - Received: {'data': 'haguri-test-4444', 'value': 'haguri,peng,jiwon,chukbok'}
-2025-07-14 00:52:23,213 - ERROR - Error: Missing fields.
