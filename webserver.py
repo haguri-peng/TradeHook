@@ -298,7 +298,7 @@ if __name__ == '__main__':
     doge_10min_data = get_candle_data('KRW-DOGE', 10)
 
     is_EMA_cross_up = calc_ema(doge_10min_data)
-    EMA_cross = is_EMA_cross_up
+    EMA_cross = 'EMA_cross_up' if is_EMA_cross_up else 'EMA_cross_down'
 
     logger.info(f"EMA_cross : {EMA_cross}")
 
