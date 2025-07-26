@@ -37,6 +37,31 @@ TradingView에서 등록한 얼러트(Alert) 조건을 만족하면 `웹훅(WebH
 다음 전략을 통해 자동 매매를 진행하며, 이 매매 전략의 <u>디폴트는 1시간이나 저는 **10분**으로 설정</u>하였습니다.  
 [Trend Follow with 8/34 EMA and Stoch RSI for 1 Hour SPX](https://kr.tradingview.com/script/583nFVCB-Trend-Follow-with-8-34-EMA-and-Stoch-RSI-for-1-Hour-SPX/)
 
+- 실전에서의 문제
+    1. 하락장(e.g. 50EMA < 200EMA 혹은 200EMA 기울기가 음수)에선 이 전략으로 이기기 힘듦
+    2. 실제 거래기록도 그렇고, 이 전략으로 보여지는 차트에선 하락장에서 벌기 쉽지 않음을 확인
+
+- 대처
+    1. <u>50EMA가 200EMA를 상승 돌파</u>(50EMA > 200EMA)하기 전까진 매수 거래를 하지 않음
+    2. 단, 매도 거래는 허용
+    3. 기존에는 UPbit에서 직접 조회해서 결과값을 계산하여 처리하였으나 TradinvView의 [EMA크로스](https://kr.tradingview.com/script/zX2A1vBN/)를 사용하여
+       웹훅에서 알림 메시지를 받게 처리
+    4. 다만, 서버를 기동할 때 최초에는 EMA 크로스 상태를 알 수 없기에 UPbit에서 정보를 확인하여 세팅합니다.
+
+```json
+{
+  "ticker": "{{ticker}}",
+  "value": "EMA_cross_up"
+}
+```
+
+```json
+{
+  "ticker": "{{ticker}}",
+  "value": "EMA_cross_down"
+}
+```
+
 ## Web Server
 
 `/webhook`에 POST 요청이 들어왔을 때에만 동작합니다.

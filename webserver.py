@@ -3,25 +3,28 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 import os, sys, math, time
 from collections import defaultdict  # 캐시를 위한 defaultdict 추가
+import pandas as pd
 
 # 현재 스크립트의 디렉토리 경로를 얻습니다.
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # account, upbit_data, trading, utils 디렉토리의 경로를 생성
 account_dir = os.path.join(current_dir, 'account')
-# upbit_data_dir = os.path.join(current_dir, 'upbit_data')
 trading_dir = os.path.join(current_dir, 'trading')
 utils_dir = os.path.join(current_dir, 'utils')
+upbit_data_dir = os.path.join(current_dir, 'upbit_data')
 
-# sys.path에 account 디렉토리를 추가
+# sys.path에 디렉토리를 추가
 sys.path.append(account_dir)
 sys.path.append(trading_dir)
 sys.path.append(utils_dir)
+sys.path.append(upbit_data_dir)
 
 # import
 from account.my_account import get_my_exchange_account
 from trading.trade import buy_market, sell_market, get_open_order
 from utils.email_utils import send_email
+from upbit_data.candle import get_min_candle_data
 
 # Flask
 app = Flask(__name__)
@@ -54,9 +57,37 @@ signal_cache = defaultdict(float)  # 기본값 0.0 (float)
 # 중복 검사 시간 창: 30초
 DUPLICATE_WINDOW = 30
 
+# EMA 크로스
+EMA_cross = ''
+
+
+def get_candle_data(ticker: str, minute: int):
+    return get_min_candle_data(ticker, minute)
+
+
+def calc_ema(df: pd.DataFrame):
+    # DataFrame 필수 데이터 검증
+    required_columns = ['close', 'date', 'time', 'volume']
+    if not all(col in df.columns for col in required_columns):
+        raise ValueError(f"DataFrame은 {required_columns} 컬럼을 포함해야 합니다.")
+
+    # 최소 200개 데이터 필요 (MA200 계산을 위해)
+    if len(df) < 200:
+        print('데이터가 부족합니다 (최소 200개 필요).')
+        raise ValueError(f"데이터가 부족(최소 200개는 필요)합니다.")
+
+    # EMA 계산
+    df['EMA50'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['EMA200'] = df['close'].ewm(span=200, adjust=False).mean()
+
+    # 50EMA와 200EMA 비교)
+    return df['EMA50'].iloc[-1] > df['EMA200'].iloc[-1]
+
 
 @app.route('/webhook', methods=['POST'])
 def webhook():  # async def로 직접 정의
+    global EMA_cross
+
     # # 인증 검증
     # signature = request.headers.get('X-Signature')
     # if signature != SECRET_KEY:
@@ -75,9 +106,15 @@ def webhook():  # async def로 직접 정의
         if not all([ticker, value]):
             raise ValueError("Missing fields.")
 
+        # EMA 크로스 값 세팅
+        if value.startswith('EMA'):
+            EMA_cross = value
+
         signal = ''
         if value.startswith('long'):
-            signal = 'buy'
+            # 50EMA > 200EMA인 경우에만 매수 시그널
+            if EMA_cross == 'EMA_cross_up':
+                signal = 'buy'
         elif value.startswith('short'):
             signal = 'sell'
 
@@ -255,4 +292,14 @@ def process_trade(ticker: str, signal: str, value: str):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5555, debug=True)
+    logger.info("TradeHook Web Server starts..")
+
+    # 도지코인(KRW-DOGE) 10분봉 가져오기
+    doge_10min_data = get_candle_data('KRW-DOGE', 10)
+
+    is_EMA_cross_up = calc_ema(doge_10min_data)
+    EMA_cross = is_EMA_cross_up
+
+    logger.info(f"EMA_cross : {EMA_cross}")
+
+    app.run(host='0.0.0.0', port=5555, debug=False)
