@@ -24,6 +24,7 @@ sys.path.append(upbit_data_dir)
 from account.my_account import get_my_exchange_account
 from trading.trade import buy_market, sell_market, get_open_order
 from utils.email_utils import send_email
+from utils.convert_utils import convert_trade_ticker, convert_simple_ticker
 from upbit_data.candle import get_min_candle_data
 
 # Flask
@@ -61,10 +62,12 @@ DUPLICATE_WINDOW = 30
 EMA_cross = ''
 
 
+# 캔들 조회
 def get_candle_data(ticker: str, minute: int):
     return get_min_candle_data(ticker, minute)
 
 
+# EMA 계산
 def calc_ema(df: pd.DataFrame):
     # DataFrame 필수 데이터 검증
     required_columns = ['close', 'date', 'time', 'volume']
@@ -76,7 +79,7 @@ def calc_ema(df: pd.DataFrame):
         print('데이터가 부족합니다 (최소 200개 필요).')
         raise ValueError(f"데이터가 부족(최소 200개는 필요)합니다.")
 
-    # EMA 계산
+    # EMA
     df['EMA50'] = df['close'].ewm(span=50, adjust=False).mean()
     df['EMA200'] = df['close'].ewm(span=200, adjust=False).mean()
 
@@ -84,6 +87,7 @@ def calc_ema(df: pd.DataFrame):
     return df['EMA50'].iloc[-1] > df['EMA200'].iloc[-1]
 
 
+# Webhook
 @app.route('/webhook', methods=['POST'])
 def webhook():  # async def로 직접 정의
     global EMA_cross
@@ -145,20 +149,6 @@ def webhook():  # async def로 직접 정의
         return jsonify({"error": str(e)}), 500
 
 
-def convert_trade_ticker(ticker: str):
-    # 뒤 3자리를 quote로 가정
-    quote = ticker[-3:]
-    base = ticker[:-3]
-    return f'{quote}-{base}'
-
-
-def convert_simple_ticker(ticker: str):
-    # 뒤 3자리를 quote로 가정
-    # quote = ticker[-3:]
-    base = ticker[:-3]
-    return f'{base}'
-
-
 def get_account_info(ticker: str):
     logger.info("========== get_account_info ==========")
 
@@ -210,11 +200,10 @@ def get_account_info(ticker: str):
 
 def process_trade(ticker: str, signal: str, value: str):
     # 기존 매매 로직 (비동기 가능하게)
-    logger.info(f"Async processing {signal} {ticker}")
+    logger.info(f"Process trading {signal} {ticker}")
 
     try:
-        # 매매 시 사용하는 티커로 변경
-        # e.g. DOGEKRW -> KRW-DOGE
+        # 매매 시 사용하는 티커로 변경 (e.g. DOGEKRW -> KRW-DOGE)
         trade_ticker = convert_trade_ticker(ticker)
         simple_ticker = convert_simple_ticker(ticker)  # DOGE
 
@@ -233,7 +222,6 @@ def process_trade(ticker: str, signal: str, value: str):
 
             # 5,000원(최소 거래금액) 이상일 때 진행
             if krw_available >= 5000:
-
                 # 매수 거래
                 buy_result = buy_market(trade_ticker, krw_available)
 
@@ -251,31 +239,12 @@ def process_trade(ticker: str, signal: str, value: str):
             if sell_result['uuid'].notnull()[0]:
                 while True:
                     open_order_df = get_open_order(trade_ticker, 'wait')
-                    # print(open_order_df)
 
                     time.sleep(5)  # 5초 대기
 
                     # wait 중인 거래가 없으면 반복 중단
                     if len(open_order_df) == 0:
                         break
-
-                # # 매도 이후에 매매수익을 확인하기 위해 계좌정보를 다시 조회
-                # after_sell_account = get_my_exchange_account()
-                # print(after_sell_account)
-                #
-                # # 원화 잔고 확인
-                # trade_result = 0
-                # if 'KRW' in after_sell_account['currency'].values:
-                #     after_sell_krw_bal = math.floor(
-                #         float(after_sell_account[after_sell_account['currency'] == 'KRW']['balance'].values[0]))
-                #     trade_result = math.floor(after_sell_krw_bal - krw_balance)
-                #
-                # logger.info(f'[KRW-DOGE] {account_info["doge_balance"]} 매도 하였습니다.')
-                # logger.info(f'매매수익은 {trade_result} 입니다.')
-                #
-                # # 매도하면서 전역변수를 초기화한다.
-                # buy_time = None
-                # krw_balance = 0
 
                 logger.info(f"[{trade_ticker}] {account_info['ticker_balance']} 매도 하였습니다.")
                 send_email(f'[{trade_ticker}] 시장가 매도',
