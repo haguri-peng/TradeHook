@@ -95,7 +95,7 @@ def webhook():  # async def로 직접 정의
     # # 인증 검증
     # signature = request.headers.get('X-Signature')
     # if signature != SECRET_KEY:
-    #     logger.warning("Invalid signature.")
+    #     logger.error("Invalid signature.")
     #     abort(403)
 
     try:
@@ -168,9 +168,9 @@ def get_account_info(ticker: str):
         ticker_balance = my_account[my_account['currency'] == ticker]['balance'].values[0]
         ticker_avg_buy_price = float(my_account[my_account['currency'] == ticker]['avg_buy_price'].values[0])
 
-    logger.debug(f"is_ticker_in_account : {is_ticker_in_account}")
-    logger.debug(f"ticker_balance : {ticker_balance}")
-    logger.debug(f"ticker_avg_buy_price : {ticker_avg_buy_price}")
+    logger.info(f"is_ticker_in_account : {is_ticker_in_account}")
+    logger.info(f"ticker_balance : {ticker_balance}")
+    logger.info(f"ticker_avg_buy_price : {ticker_avg_buy_price}")
 
     # 원화 잔고 확인
     krw_amount = 0.0
@@ -179,7 +179,7 @@ def get_account_info(ticker: str):
         my_account['balance'] = my_account['balance'].astype(float)
         krw_amount = my_account[my_account['currency'] == krw_ticker]['balance'].values[0]
 
-    logger.debug(f"krw_amount : {krw_amount}")
+    logger.info(f"krw_amount : {krw_amount}")
 
     # 투자 가능한 원화 계산
     # 거래 수수료는 원화(KRW) 마켓에서는 0.05%이나 실제 매수 시 전체 금액에서 0.1%를 제한 금액으로 투자를 진행
@@ -187,7 +187,7 @@ def get_account_info(ticker: str):
     if krw_amount > 0:
         krw_invest_amount = math.floor(krw_amount * 0.999)
 
-    logger.debug(f"krw_invest_amount : {krw_invest_amount}")
+    logger.info(f"krw_invest_amount : {krw_invest_amount}")
 
     return {
         'is_ticker': is_ticker_in_account,
@@ -202,62 +202,59 @@ def process_trade(ticker: str, signal: str, value: str):
     # 기존 매매 로직 (비동기 가능하게)
     logger.info(f"Process trading {signal} {ticker}")
 
-    try:
-        # 매매 시 사용하는 티커로 변경 (e.g. DOGEKRW -> KRW-DOGE)
-        trade_ticker = convert_trade_ticker(ticker)
-        simple_ticker = convert_simple_ticker(ticker)  # DOGE
+    # 매매 시 사용하는 티커로 변경 (e.g. DOGEKRW -> KRW-DOGE)
+    trade_ticker = convert_trade_ticker(ticker)
+    simple_ticker = convert_simple_ticker(ticker)  # DOGE
 
-        logger.info(f"trade_ticker : {trade_ticker}")
-        logger.info(f"simple_ticker : {simple_ticker}")
+    logger.info(f"trade_ticker : {trade_ticker}")
+    logger.info(f"simple_ticker : {simple_ticker}")
 
-        # 계좌정보 확인
-        account_info = get_account_info(simple_ticker)
+    # 계좌정보 확인
+    account_info = get_account_info(simple_ticker)
 
-        # 매수
-        if signal == 'buy':
-            # 현재 계좌의 잔고(KRW)에서 투자 가능한 금액 확인
-            krw_available = math.floor(account_info['krw_available'])
+    # 매수
+    if signal == 'buy':
+        # 현재 계좌의 잔고(KRW)에서 투자 가능한 금액 확인
+        krw_available = math.floor(account_info['krw_available'])
 
-            logger.info(f"krw_available : {krw_available}")
+        logger.info(f"krw_available : {krw_available}")
 
-            # 5,000원(최소 거래금액) 이상일 때 진행
-            if krw_available >= 5000:
-                # 매수 거래
-                buy_result = buy_market(trade_ticker, krw_available)
+        # 5,000원(최소 거래금액) 이상일 때 진행
+        if krw_available >= 5000:
+            # 매수 거래
+            buy_result = buy_market(trade_ticker, krw_available)
 
-                if buy_result['uuid'].notnull()[0]:
-                    # 시장가로 주문하기 때문에 uuid 값이 있으면 정상적으로 처리됐다고 가정한다.
-                    logger.info(f"[{trade_ticker}] {krw_available}원 매수 하였습니다.")
-                    send_email(f'[{trade_ticker}] 시장가 매수', f'TrendFollow - {value}')
-                else:
-                    logger.error("매수가 정상적으로 처리되지 않았습니다.")
-                    send_email('매수 중 에러 발생', '매수 중 에러가 발생하였습니다. 확인해주세요.')
-
-        # 매도
-        elif signal == 'sell':
-            sell_result = sell_market(trade_ticker, account_info['ticker_balance'])
-            if sell_result['uuid'].notnull()[0]:
-                while True:
-                    open_order_df = get_open_order(trade_ticker, 'wait')
-
-                    time.sleep(5)  # 5초 대기
-
-                    # wait 중인 거래가 없으면 반복 중단
-                    if len(open_order_df) == 0:
-                        break
-
-                logger.info(f"[{trade_ticker}] {account_info['ticker_balance']} 매도 하였습니다.")
-                send_email(f'[{trade_ticker}] 시장가 매도',
-                           f'{account_info["ticker_balance"]} 매도 하였습니다.')
+            if buy_result['uuid'].notnull()[0]:
+                # 시장가로 주문하기 때문에 uuid 값이 있으면 정상적으로 처리됐다고 가정한다.
+                logger.info(f"[{trade_ticker}] {krw_available}원 매수 하였습니다.")
+                send_email(f'[{trade_ticker}] 시장가 매수', f'TrendFollow - {value}')
             else:
-                logger.error('매도가 정상적으로 처리되지 않았습니다.')
-                send_email('매도 중 에러 발생', '매도 중 에러가 발생하였습니다. 확인해주세요.')
+                send_email('매수 중 에러 발생', '매수 중 에러가 발생하였습니다. 확인해주세요.')
+                raise RuntimeError("매수가 정상적으로 처리되지 않았습니다.")
 
-    except ValueError as ve:
-        logger.error(f"ValueError : {ve}")
+    # 매도
+    elif signal == 'sell':
+        ticker_balance = account_info['ticker_balance']
+        if not ticker_balance:
+            raise ValueError("매도할 대상이 없습니다.")
 
-    except Exception as e:
-        logger.error(f"예상치 못한 오류 발생 : {e}")
+        sell_result = sell_market(trade_ticker, ticker_balance)
+        if sell_result['uuid'].notnull()[0]:
+            while True:
+                open_order_df = get_open_order(trade_ticker, 'wait')
+
+                time.sleep(5)  # 5초 대기
+
+                # wait 중인 거래가 없으면 반복 중단
+                if len(open_order_df) == 0:
+                    break
+
+            logger.info(f"[{trade_ticker}] {ticker_balance} 매도 하였습니다.")
+            send_email(f'[{trade_ticker}] 시장가 매도',
+                       f'{ticker_balance} 매도 하였습니다.')
+        else:
+            send_email('매도 중 에러 발생', '매도 중 에러가 발생하였습니다. 확인해주세요.')
+            raise RuntimeError("매도가 정상적으로 처리되지 않았습니다.")
 
 
 if __name__ == '__main__':
