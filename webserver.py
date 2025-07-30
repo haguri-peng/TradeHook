@@ -235,7 +235,7 @@ def process_trade(ticker: str, signal: str, value: str):
     # 매도
     elif signal == 'sell':
         ticker_balance = account_info['ticker_balance']
-        if not ticker_balance:
+        if not ticker_balance or ticker_balance == '0':
             raise ValueError("매도할 대상이 없습니다.")
 
         sell_result = sell_market(trade_ticker, ticker_balance)
