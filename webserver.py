@@ -41,7 +41,7 @@ handler = TimedRotatingFileHandler(
     backupCount=30,  # 최대 30일치 백업 파일 유지 (필요 시 조정)
     encoding='utf-8'  # UTF-8 인코딩
 )
-handler.suffix = '%Y-%m-%d.log'  # 로테이션 파일명 suffix: app-YYYY-MM-DD.log
+handler.suffix = '%Y-%m-%d.log'  # 로테이션 파일명: app.log.YYYY-MM-DD
 handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))  # 로그 형식
 
 # 로거 설정
@@ -52,7 +52,7 @@ logger.addHandler(handler)
 # TradingView에서 설정한 시크릿 키
 SECRET_KEY = 'tradingview_haguri_peng_secret_key'
 
-# 중복 검사 캐시: 키 = "symbol_action_price", 값 = 마지막 처리 timestamp
+# 중복 검사 캐시: 키 = "ticker_value_signal", 값 = 마지막 처리 timestamp
 signal_cache = defaultdict(float)  # 기본값 0.0 (float)
 
 # 중복 검사 시간 창: 30초
@@ -89,7 +89,7 @@ def calc_ema(df: pd.DataFrame):
 
 # Webhook
 @app.route('/webhook', methods=['POST'])
-def webhook():  # async def로 직접 정의
+def webhook():
     global EMA_cross
 
     # # 인증 검증
@@ -127,7 +127,7 @@ def webhook():  # async def로 직접 정의
             raise ValueError("signal is empty.")
 
         # 중복 검사 키 생성
-        cache_key = f'{ticker}_{value}_{signal}'
+        cache_key = f"{ticker}_{value}_{signal}"
 
         current_time = time.time()
         last_processed = signal_cache[cache_key]
