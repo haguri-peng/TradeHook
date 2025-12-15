@@ -24,7 +24,8 @@ sys.path.append(upbit_data_dir)
 from account.my_account import get_my_exchange_account
 from trading.trade import buy_market, sell_market, get_open_order
 from utils.email_utils import send_email
-from utils.convert_utils import convert_trade_ticker, convert_simple_ticker
+from utils.convert_utils import convert_trade_ticker, convert_simple_ticker, get_trade_price, \
+    calculate_min_quantity_precise
 from upbit_data.candle import get_min_candle_data
 
 # Flask
@@ -114,13 +115,14 @@ def webhook():
         if value.startswith('EMA'):
             EMA_cross = value
 
-        signal = ''
-        if value.startswith('long'):
-            # 50EMA > 200EMA인 경우에만 매수 시그널
-            if EMA_cross == 'EMA_cross_up':
-                signal = 'buy'
-        elif value.startswith('short'):
-            signal = 'sell'
+        # signal = ''
+        # if value.startswith('long'):
+        #     # 50EMA > 200EMA인 경우에만 매수 시그널
+        #     if EMA_cross == 'EMA_cross_up':
+        #         signal = 'buy'
+        # elif value.startswith('short'):
+        #     signal = 'sell'
+        signal = value.lower()
 
         logger.info(f"signal: {signal}")
         if not signal:
@@ -209,6 +211,11 @@ def process_trade(ticker: str, signal: str, value: str):
     logger.info(f"trade_ticker : {trade_ticker}")
     logger.info(f"simple_ticker : {simple_ticker}")
 
+    # trade_price 추출
+    ticker_trade_price = get_trade_price(trade_ticker)
+
+    logger.info(f"[{trade_ticker}] ticker_trade_price : {ticker_trade_price}")
+
     # 계좌정보 확인
     account_info = get_account_info(simple_ticker)
 
@@ -220,14 +227,21 @@ def process_trade(ticker: str, signal: str, value: str):
         logger.info(f"krw_available : {krw_available}")
 
         # 5,000원(최소 거래금액) 이상일 때 진행
-        if krw_available >= 5000:
+        # 5,000 -> 50,000 KRW
+        # if krw_available >= 5000:
+        if krw_available >= 50000:
+            buy_krw_amount = 50000
+
             # 매수 거래
-            buy_result = buy_market(trade_ticker, krw_available)
+            # buy_result = buy_market(trade_ticker, krw_available)
+            buy_result = buy_market(trade_ticker, buy_krw_amount)
 
             if buy_result['uuid'].notnull()[0]:
                 # 시장가로 주문하기 때문에 uuid 값이 있으면 정상적으로 처리됐다고 가정한다.
-                logger.info(f"[{trade_ticker}] {krw_available}원 매수 하였습니다.")
-                send_email(f'[{trade_ticker}] 시장가 매수', f'TrendFollow - {value}')
+                # logger.info(f"[{trade_ticker}] {krw_available}원 매수 하였습니다.")
+                logger.info(f"[{trade_ticker}] {buy_krw_amount}원 매수 하였습니다.")
+                # send_email(f'[{trade_ticker}] 시장가 매수', f'TrendFollow - {value}')
+                send_email(f'[{trade_ticker}] 시장가 매수', f'[{trade_ticker}] {buy_krw_amount}원 매수 하였습니다.')
             else:
                 send_email('매수 중 에러 발생', '매수 중 에러가 발생하였습니다. 확인해주세요.')
                 raise RuntimeError("매수가 정상적으로 처리되지 않았습니다.")
@@ -238,7 +252,19 @@ def process_trade(ticker: str, signal: str, value: str):
         if not ticker_balance or ticker_balance == '0':
             raise ValueError("매도할 대상이 없습니다.")
 
-        sell_result = sell_market(trade_ticker, ticker_balance)
+        if ticker_trade_price is None:
+            raise ValueError(f"[{ticker}] trade_price 가 없습니다.")
+
+        # 매도할 balance를 50,000 KRW에 맞게 환산
+        sell_amount = calculate_min_quantity_precise(ticker_trade_price, 8)
+
+        # sell_amount > ticker_balance
+        sell_amount = ticker_balance
+
+        logger.info(f"ticker_balance : {ticker_balance}")
+        logger.info(f"sell_amount : {sell_amount}")
+
+        sell_result = sell_market(trade_ticker, str(sell_amount))
         if sell_result['uuid'].notnull()[0]:
             while True:
                 open_order_df = get_open_order(trade_ticker, 'wait')
@@ -249,9 +275,9 @@ def process_trade(ticker: str, signal: str, value: str):
                 if len(open_order_df) == 0:
                     break
 
-            logger.info(f"[{trade_ticker}] {ticker_balance} 매도 하였습니다.")
+            logger.info(f"[{trade_ticker}] {sell_amount} 매도 하였습니다.")
             send_email(f'[{trade_ticker}] 시장가 매도',
-                       f'{ticker_balance} 매도 하였습니다.')
+                       f'{sell_amount} 매도 하였습니다.')
         else:
             send_email('매도 중 에러 발생', '매도 중 에러가 발생하였습니다. 확인해주세요.')
             raise RuntimeError("매도가 정상적으로 처리되지 않았습니다.")
