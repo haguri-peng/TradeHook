@@ -259,7 +259,8 @@ def process_trade(ticker: str, signal: str, value: str):
         sell_amount = calculate_min_quantity_precise(ticker_trade_price, 8)
 
         # sell_amount > ticker_balance
-        sell_amount = ticker_balance
+        if sell_amount > ticker_balance:
+            sell_amount = ticker_balance
 
         logger.info(f"ticker_balance : {ticker_balance}")
         logger.info(f"sell_amount : {sell_amount}")
