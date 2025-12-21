@@ -4,6 +4,7 @@ from logging.handlers import TimedRotatingFileHandler
 import os, sys, math, time
 from collections import defaultdict  # 캐시를 위한 defaultdict 추가
 import pandas as pd
+from decimal import Decimal
 
 # 현재 스크립트의 디렉토리 경로를 얻습니다.
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -259,8 +260,8 @@ def process_trade(ticker: str, signal: str, value: str):
         sell_amount = calculate_min_quantity_precise(ticker_trade_price, 8)
 
         # sell_amount > ticker_balance
-        if sell_amount > ticker_balance:
-            sell_amount = ticker_balance
+        if sell_amount > Decimal(ticker_balance):
+            sell_amount = Decimal(ticker_balance)
 
         logger.info(f"ticker_balance : {ticker_balance}")
         logger.info(f"sell_amount : {sell_amount}")
